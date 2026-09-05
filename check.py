@@ -25,8 +25,11 @@ WEBHOOK = os.environ.get("DISCORD_WEBHOOK", "").strip()
 
 # Mode surveillance continue : on boucle a l'interieur d'un seul run GitHub Actions.
 # Le cron relance un run toutes les 5 min, donc la couverture est ininterrompue.
-INTERVALLE = 30      # secondes entre deux verifications
-DUREE_RUN = 270      # duree d'une boucle (4 min 30), avant que le cron relance
+INTERVALLE = 30       # secondes entre deux verifications, en veille
+CADENCE_ALARME = 5    # secondes entre deux alertes, une fois la vente detectee.
+                      # 5 s est le plancher : en dessous, ntfy et Discord nous
+                      # limitent (rate limit) et PLUS AUCUNE alerte ne passe.
+DUREE_RUN = 270       # duree d'une boucle (4 min 30), avant que le cron relance
 LIEN_STOP = "https://github.com/trazturk-byte/tff-alerte/actions/workflows/surveillance.yml"
 
 # ntfy.sh : alarme sur telephone, priorite max, traverse le mode silencieux.
@@ -224,12 +227,12 @@ def ntfy(titre, message, priorite="max"):
 
 
 def ping():
-    """Simulation complete : 4 alertes espacees de 12 s, comme en vraie detection.
+    """Simulation complete : 10 alertes espacees de 5 s, comme en vraie detection.
 
     En production le rythme est de 30 s et ne s'arrete jamais tant que le
     workflow n'est pas desactive a la main.
     """
-    total = 4
+    total = 10
     for i in range(1, total + 1):
         ntfy(
             f"TEST {i}/{total} - alarme repetee",
@@ -261,7 +264,7 @@ def ping():
                 print(f"[{i}/{total}] Discord : echec ({e})")
 
         if i < total:
-            time.sleep(12)
+            time.sleep(CADENCE_ALARME)
 
 
 def main():
@@ -332,12 +335,21 @@ def boucler(test=False):
             alerte_en_cours = True
             if test:
                 print(">>> (mode test) alerte NON envoyee")
-            else:
+                break
+            # MODE ALARME : on arrete de scanner, on martele jusqu'a la fin du run.
+            # Le cron relance un run toutes les 5 min, donc ca ne s'arrete jamais
+            # tant que le workflow n'est pas desactive a la main.
+            print(">>> MODE ALARME — envoi toutes les 5 s jusqu'a la fin du run")
+            envoyes = 0
+            while time.monotonic() - debut < DUREE_RUN:
                 try:
                     alerter(trouvailles)
-                    print(">>> ALERTE ENVOYEE")
+                    envoyes += 1
                 except (urllib.error.URLError, urllib.error.HTTPError, OSError) as e:
-                    print(f">>> echec envoi Discord : {e}")
+                    print(f"echec envoi : {e}")
+                time.sleep(CADENCE_ALARME)
+            print(f">>> {envoyes} alertes envoyees sur ce run")
+            break
 
         restant = DUREE_RUN - (time.monotonic() - debut)
         if restant <= INTERVALLE:
