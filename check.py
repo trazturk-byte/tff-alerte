@@ -29,6 +29,10 @@ INTERVALLE = 30      # secondes entre deux verifications
 DUREE_RUN = 270      # duree d'une boucle (4 min 30), avant que le cron relance
 LIEN_STOP = "https://github.com/trazturk-byte/tff-alerte/actions/workflows/surveillance.yml"
 
+# ntfy.sh : alarme sur telephone, priorite max, traverse le mode silencieux.
+# Aucun compte requis : il suffit de s'abonner a ce sujet dans l'appli ntfy.
+NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "tff-kocaeli-2026-x9k4m7q2").strip()
+
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
@@ -172,6 +176,15 @@ def alerter(trouvailles):
 
 
 def envoyer(contenu):
+    """Envoie sur les deux canaux. Un echec sur l'un n'empeche pas l'autre."""
+    ntfy(
+        "BILLETTERIE TURKIYE-FRANSA OUVERTE",
+        "Ouvre passo.com.tr avec le compte de ta mere. "
+        "Tribune BATI ALT ORTA, rang le plus bas, 3 billets.",
+    )
+
+    if not WEBHOOK:
+        return
     corps = json.dumps({"content": contenu}).encode()
     req = urllib.request.Request(
         WEBHOOK,
@@ -179,19 +192,53 @@ def envoyer(contenu):
         headers={"Content-Type": "application/json", "User-Agent": UA},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=20) as rep:
-        print(f"Discord : HTTP {rep.status}")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as rep:
+            print(f"Discord : HTTP {rep.status}")
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError) as e:
+        print(f"Discord : echec ({e})")
+
+
+def ntfy(titre, message, priorite="max"):
+    """Notification telephone via ntfy.sh. Priorite max = son d'alarme,
+    passe outre le mode silencieux et le Ne pas deranger."""
+    if not NTFY_TOPIC:
+        return
+    req = urllib.request.Request(
+        f"https://ntfy.sh/{NTFY_TOPIC}",
+        data=message.encode("utf-8"),
+        headers={
+            "Title": titre,                 # ASCII uniquement (contrainte HTTP)
+            "Priority": priorite,
+            "Tags": "rotating_light",
+            "Click": "https://www.passo.com.tr/",
+            "User-Agent": UA,
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as rep:
+            print(f"ntfy : HTTP {rep.status}")
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError) as e:
+        print(f"ntfy : echec ({e})")
 
 
 def ping():
-    """Envoie un message de test, pour verifier que Discord recoit bien."""
+    """Message de test sur les deux canaux, pour verifier que l'alarme marche."""
+    ntfy(
+        "TEST - l'alarme fonctionne",
+        "Si ton telephone a sonne, tout est operationnel. "
+        "Le vrai message arrivera quand la billetterie ouvrira.",
+    )
+
+    if not WEBHOOK:
+        return
     msg = (
         "@everyone\n\n"
         "# ✅ TEST — le bot fonctionne\n\n"
-        "Ceci est un message de test. Si tu le vois **et que ton téléphone a sonné**, "
-        "l'alarme est opérationnelle.\n\n"
+        "Si tu vois ce message **et que ton téléphone a sonné**, l'alarme est opérationnelle.\n\n"
         "Le vrai message arrivera quand la billetterie Türkiye–Fransa ouvrira, "
-        "et il se répétera toutes les 5 minutes jusqu'à ce que tu coupes le workflow."
+        "et il se répétera toutes les 30 secondes jusqu'à ce que tu coupes le workflow."
     )
     corps = json.dumps({"content": msg}).encode()
     req = urllib.request.Request(
@@ -200,14 +247,19 @@ def ping():
         headers={"Content-Type": "application/json", "User-Agent": UA},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=20) as rep:
-        print(f"Message de test envoye : HTTP {rep.status}")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as rep:
+            print(f"Discord : HTTP {rep.status}")
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError) as e:
+        print(f"Discord : echec ({e})")
 
 
 def main():
     test = "--test" in sys.argv
-    if not WEBHOOK and not test:
-        print("ERREUR : le secret DISCORD_WEBHOOK n'est pas defini.", file=sys.stderr)
+    if not WEBHOOK:
+        print("[info] Pas de webhook Discord — ntfy seul assurera l'alerte.")
+    if not NTFY_TOPIC and not WEBHOOK and not test:
+        print("ERREUR : aucun canal d'alerte configure.", file=sys.stderr)
         return 1
 
     if "--ping" in sys.argv:
