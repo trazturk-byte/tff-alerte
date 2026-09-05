@@ -36,6 +36,12 @@ LIEN_STOP = "https://github.com/trazturk-byte/tff-alerte/actions/workflows/surve
 # Aucun compte requis : il suffit de s'abonner a ce sujet dans l'appli ntfy.
 NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "tff-kocaeli-2026-x9k4m7q2").strip()
 
+# Sujet "boite aux lettres" du bouton STOP. Le bouton dans la notification
+# poste dessus ; le script le consulte avant chaque alerte et s'arrete s'il
+# y a un message recent. Zero serveur, zero bot.
+STOP_TOPIC = NTFY_TOPIC + "-stop"
+STOP_FENETRE = "12h"  # duree pendant laquelle un appui sur STOP fait effet
+
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
@@ -202,6 +208,26 @@ def envoyer(contenu):
         print(f"Discord : echec ({e})")
 
 
+def stop_demande():
+    """Quelqu'un a-t-il appuye sur le bouton STOP recemment ?"""
+    url = f"https://ntfy.sh/{STOP_TOPIC}/json?poll=1&since={STOP_FENETRE}"
+    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as rep:
+            for ligne in rep.read().decode("utf-8", errors="replace").splitlines():
+                if not ligne.strip():
+                    continue
+                try:
+                    evt = json.loads(ligne)
+                except ValueError:
+                    continue
+                if evt.get("event") == "message":
+                    return True
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError) as e:
+        print(f"[stop] verification impossible ({e}) — on continue")
+    return False
+
+
 def ntfy(titre, message, priorite="max"):
     """Notification telephone via ntfy.sh. Priorite max = son d'alarme,
     passe outre le mode silencieux et le Ne pas deranger."""
@@ -215,6 +241,12 @@ def ntfy(titre, message, priorite="max"):
             "Priority": priorite,
             "Tags": "rotating_light",
             "Click": "https://www.passo.com.tr/",
+            # Bouton STOP directement dans la notification : un appui poste sur
+            # le sujet d'arret, que le script consulte avant chaque envoi.
+            "Actions": (
+                f"http, STOP ALARME, https://ntfy.sh/{STOP_TOPIC}, "
+                "method=POST, body=stop, clear=true"
+            ),
             "User-Agent": UA,
         },
         method="POST",
@@ -234,6 +266,10 @@ def ping():
     """
     total = 10
     for i in range(1, total + 1):
+        if stop_demande():
+            print(">>> STOP recu — demo interrompue")
+            ntfy("Alarme coupee", "Le bouton STOP fonctionne.", "default")
+            return
         ntfy(
             f"TEST {i}/{total} - alarme repetee",
             "Simulation du spam. En vrai ca se repete toutes les 30 s, "
@@ -339,9 +375,13 @@ def boucler(test=False):
             # MODE ALARME : on arrete de scanner, on martele jusqu'a la fin du run.
             # Le cron relance un run toutes les 5 min, donc ca ne s'arrete jamais
             # tant que le workflow n'est pas desactive a la main.
-            print(">>> MODE ALARME — envoi toutes les 5 s jusqu'a la fin du run")
+            print(">>> MODE ALARME — envoi toutes les 5 s jusqu'a appui sur STOP")
             envoyes = 0
             while time.monotonic() - debut < DUREE_RUN:
+                if stop_demande():
+                    print(">>> STOP recu — alarme coupee")
+                    ntfy("Alarme coupee", "Tu as appuye sur STOP. Bonne chance !", "default")
+                    break
                 try:
                     alerter(trouvailles)
                     envoyes += 1
