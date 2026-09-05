@@ -1,0 +1,23 @@
+name: Surveillance billetterie Türkiye-Fransa
+
+on:
+  schedule:
+    # Toutes les 5 minutes (heure UTC). GitHub peut décaler de quelques minutes en cas de charge.
+    - cron: "*/5 * * * *"
+  workflow_dispatch: # permet de lancer un test manuel depuis l'onglet Actions
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Vérifier la billetterie
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: python check.py
