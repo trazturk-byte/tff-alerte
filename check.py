@@ -169,11 +169,36 @@ def alerter(trouvailles):
         print(f"Discord : HTTP {rep.status}")
 
 
+def ping():
+    """Envoie un message de test, pour verifier que Discord recoit bien."""
+    msg = (
+        "@everyone\n\n"
+        "# ✅ TEST — le bot fonctionne\n\n"
+        "Ceci est un message de test. Si tu le vois **et que ton téléphone a sonné**, "
+        "l'alarme est opérationnelle.\n\n"
+        "Le vrai message arrivera quand la billetterie Türkiye–Fransa ouvrira, "
+        "et il se répétera toutes les 5 minutes jusqu'à ce que tu coupes le workflow."
+    )
+    corps = json.dumps({"content": msg}).encode()
+    req = urllib.request.Request(
+        WEBHOOK,
+        data=corps,
+        headers={"Content-Type": "application/json", "User-Agent": UA},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=20) as rep:
+        print(f"Message de test envoye : HTTP {rep.status}")
+
+
 def main():
     test = "--test" in sys.argv
     if not WEBHOOK and not test:
         print("ERREUR : le secret DISCORD_WEBHOOK n'est pas defini.", file=sys.stderr)
         return 1
+
+    if "--ping" in sys.argv:
+        ping()
+        return 0
 
     trouvailles = {}
     for cle, url in URLS.items():
