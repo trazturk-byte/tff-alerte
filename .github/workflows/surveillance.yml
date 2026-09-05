@@ -2,19 +2,25 @@ name: Surveillance billetterie Turkiye-Fransa
 
 on:
   schedule:
-    # Toutes les 5 minutes (UTC). GitHub peut decaler de quelques minutes en cas de charge.
+    # Un run toutes les 5 minutes. Chaque run BOUCLE en interne pendant 4 min 30
+    # en verifiant toutes les 30 secondes -> couverture quasi ininterrompue.
     - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       test_discord:
-        description: "Envoyer un message de TEST sur Discord (pour verifier l'alarme)"
+        description: "Envoyer un message de TEST sur Discord"
         type: boolean
         default: false
+
+# Evite l'empilement si un run deborde sur le suivant.
+concurrency:
+  group: surveillance
+  cancel-in-progress: false
 
 jobs:
   verifier:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
 
@@ -22,7 +28,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Verifier la billetterie
+      - name: Surveillance continue
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        run: python check.py ${{ inputs.test_discord && '--ping' || '' }}
+        run: |
+          if [ "${{ inputs.test_discord }}" = "true" ]; then
+            python check.py --ping
+          else
+            python check.py --watch
+          fi

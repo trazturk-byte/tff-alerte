@@ -14,6 +14,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -21,6 +22,12 @@ from email.utils import parsedate_to_datetime
 from html import unescape
 
 WEBHOOK = os.environ.get("DISCORD_WEBHOOK", "").strip()
+
+# Mode surveillance continue : on boucle a l'interieur d'un seul run GitHub Actions.
+# Le cron relance un run toutes les 5 min, donc la couverture est ininterrompue.
+INTERVALLE = 30      # secondes entre deux verifications
+DUREE_RUN = 270      # duree d'une boucle (4 min 30), avant que le cron relance
+LIEN_STOP = "https://github.com/trazturk-byte/tff-alerte/actions/workflows/surveillance.yml"
 
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -156,9 +163,16 @@ def alerter(trouvailles):
         "3. **3 billets** — saisir les 3 pièces d'identité",
         "",
         "⏳ La prévente Kırmızı ne dure que **24 heures**.",
+        "",
+        f"🛑 **POUR ARRÊTER LE SPAM** → {LIEN_STOP}",
+        "(bouton `···` en haut à droite → `Disable workflow`)",
     ]
 
-    corps = json.dumps({"content": "\n".join(lignes)[:1900]}).encode()
+    envoyer("\n".join(lignes)[:1900])
+
+
+def envoyer(contenu):
+    corps = json.dumps({"content": contenu}).encode()
     req = urllib.request.Request(
         WEBHOOK,
         data=corps,
@@ -200,6 +214,22 @@ def main():
         ping()
         return 0
 
+    if "--watch" in sys.argv:
+        return boucler(test)
+
+    trouvailles = scanner()
+    if trouvailles and not test:
+        alerter(trouvailles)
+        print(">>> ALERTE ENVOYEE")
+    elif trouvailles:
+        print(">>> (mode test) alerte NON envoyee")
+    else:
+        print(">>> Rien a signaler.")
+    return 0
+
+
+def scanner():
+    """Un passage sur les 4 sources. Renvoie les signaux trouves."""
     trouvailles = {}
     for cle, url in URLS.items():
         try:
@@ -218,14 +248,41 @@ def main():
             trouvailles[cle] = raisons
         else:
             print(f"[rien]   {LIBELLES[cle]}")
+    return trouvailles
 
-    if trouvailles and not test:
-        alerter(trouvailles)
-        print(">>> ALERTE ENVOYEE")
-    elif trouvailles:
-        print(">>> (mode test) alerte NON envoyee")
-    else:
-        print(">>> Rien a signaler.")
+
+def boucler(test=False):
+    """Surveillance continue pendant toute la duree du run GitHub Actions.
+
+    Verifie toutes les INTERVALLE secondes. Des qu'un signal apparait, spamme
+    Discord a chaque tour jusqu'a ce que le workflow soit desactive a la main.
+    """
+    debut = time.monotonic()
+    tour = 0
+    alerte_en_cours = False
+
+    while time.monotonic() - debut < DUREE_RUN:
+        tour += 1
+        print(f"\n--- tour {tour} (t+{int(time.monotonic() - debut)}s) ---")
+        trouvailles = scanner()
+
+        if trouvailles:
+            alerte_en_cours = True
+            if test:
+                print(">>> (mode test) alerte NON envoyee")
+            else:
+                try:
+                    alerter(trouvailles)
+                    print(">>> ALERTE ENVOYEE")
+                except (urllib.error.URLError, urllib.error.HTTPError, OSError) as e:
+                    print(f">>> echec envoi Discord : {e}")
+
+        restant = DUREE_RUN - (time.monotonic() - debut)
+        if restant <= INTERVALLE:
+            break
+        time.sleep(INTERVALLE)
+
+    print(f"\n>>> Fin du run : {tour} verifications, alerte={alerte_en_cours}")
     return 0
 
 
