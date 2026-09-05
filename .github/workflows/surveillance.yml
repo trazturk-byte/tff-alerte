@@ -31,6 +31,8 @@ jobs:
       - name: Surveillance continue
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          PUSHOVER_USER: ${{ secrets.PUSHOVER_USER }}
+          PUSHOVER_TOKEN: ${{ secrets.PUSHOVER_TOKEN }}
         run: |
           if [ "${{ inputs.test_discord }}" = "true" ]; then
             python check.py --ping

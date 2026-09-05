@@ -16,6 +16,7 @@ import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
@@ -41,6 +42,15 @@ NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "tff-kocaeli-2026-x9k4m7q2").strip()
 # y a un message recent. Zero serveur, zero bot.
 STOP_TOPIC = NTFY_TOPIC + "-stop"
 STOP_FENETRE = "12h"  # duree pendant laquelle un appui sur STOP fait effet
+
+# Pushover : LE canal d'alarme. Priorite 2 = "Emergency" : le telephone sonne
+# fort, traverse le mode silencieux et le Ne pas deranger, et RE-SONNE toutes
+# les 30 s jusqu'a ce que l'utilisateur appuie sur "Acknowledge".
+PUSHOVER_USER = os.environ.get("PUSHOVER_USER", "").strip()
+PUSHOVER_TOKEN = os.environ.get("PUSHOVER_TOKEN", "").strip()
+PUSHOVER_SON = "siren"     # sirene ; alternatives : persistent, alien, spacealarm
+PUSHOVER_RETRY = 30        # secondes entre deux sonneries (minimum autorise)
+PUSHOVER_EXPIRE = 10800    # 3 h de repetition maximum (plafond de l'API)
 
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -208,6 +218,41 @@ def envoyer(contenu):
         print(f"Discord : echec ({e})")
 
 
+def pushover(titre, message, urgence=True):
+    """Alarme telephone. En urgence : sonne toutes les 30 s jusqu'a acquittement."""
+    if not (PUSHOVER_USER and PUSHOVER_TOKEN):
+        print("[pushover] non configure")
+        return
+    params = {
+        "token": PUSHOVER_TOKEN,
+        "user": PUSHOVER_USER,
+        "title": titre,
+        "message": message,
+        "sound": PUSHOVER_SON,
+        "url": "https://www.passo.com.tr/",
+        "url_title": "Ouvrir Passo",
+    }
+    if urgence:
+        params.update({
+            "priority": "2",
+            "retry": str(PUSHOVER_RETRY),
+            "expire": str(PUSHOVER_EXPIRE),
+        })
+    req = urllib.request.Request(
+        "https://api.pushover.net/1/messages.json",
+        data=urllib.parse.urlencode(params).encode(),
+        headers={"Content-Type": "application/x-www-form-urlencoded", "User-Agent": UA},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as rep:
+            print(f"Pushover : HTTP {rep.status}" + (" (URGENCE)" if urgence else ""))
+    except urllib.error.HTTPError as e:
+        print(f"Pushover : echec HTTP {e.code} — {e.read().decode('utf-8', 'replace')[:200]}")
+    except (urllib.error.URLError, OSError) as e:
+        print(f"Pushover : echec ({e})")
+
+
 def stop_demande():
     """Quelqu'un a-t-il appuye sur le bouton STOP recemment ?"""
     url = f"https://ntfy.sh/{STOP_TOPIC}/json?poll=1&since={STOP_FENETRE}"
@@ -264,6 +309,14 @@ def ping():
     En production le rythme est de 30 s et ne s'arrete jamais tant que le
     workflow n'est pas desactive a la main.
     """
+    # Alarme Pushover en priorite Emergency : elle sonnera toutes les 30 s
+    # toute seule, jusqu'a ce que tu appuies sur "Acknowledge".
+    pushover(
+        "TEST - alarme d'urgence",
+        "Ceci est un test. La sirene va se repeter toutes les 30 s "
+        "jusqu'a ce que tu appuies sur Acknowledge.",
+    )
+
     debut = time.monotonic()
     i = 0
     while time.monotonic() - debut < DUREE_RUN:
@@ -379,6 +432,14 @@ def boucler(test=False):
             # Le cron relance un run toutes les 5 min, donc ca ne s'arrete jamais
             # tant que le workflow n'est pas desactive a la main.
             print(">>> MODE ALARME — envoi toutes les 5 s jusqu'a appui sur STOP")
+            # Pushover en priorite Emergency : une seule fois par run.
+            # C'est Pushover lui-meme qui re-sonne toutes les 30 s jusqu'a
+            # l'acquittement — inutile d'empiler les alertes.
+            pushover(
+                "BILLETTERIE TURKIYE-FRANSA OUVERTE",
+                "Ouvre passo.com.tr avec le compte de ta mere. "
+                "Tribune BATI ALT ORTA, rang le plus bas, 3 billets.",
+            )
             envoyes = 0
             while time.monotonic() - debut < DUREE_RUN:
                 if stop_demande():
