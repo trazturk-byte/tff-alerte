@@ -264,27 +264,29 @@ def ping():
     En production le rythme est de 30 s et ne s'arrete jamais tant que le
     workflow n'est pas desactive a la main.
     """
-    total = 10
-    for i in range(1, total + 1):
+    debut = time.monotonic()
+    i = 0
+    while time.monotonic() - debut < DUREE_RUN:
         if stop_demande():
-            print(">>> STOP recu — demo interrompue")
-            ntfy("Alarme coupee", "Le bouton STOP fonctionne.", "default")
+            print(f">>> STOP recu apres {i} alertes — demo interrompue")
+            ntfy("Alarme coupee", "Le bouton STOP fonctionne. Tout est operationnel.", "default")
             return
+        i += 1
         ntfy(
-            f"TEST {i}/{total} - alarme repetee",
-            "Simulation du spam. En vrai ca se repete toutes les 30 s, "
-            "sans fin, jusqu'a ce que tu desactives le workflow.",
+            f"TEST {i} - alarme sans fin",
+            "Ca continue jusqu'a ce que tu appuies sur STOP ALARME. "
+            "Appuie dessus pour verifier.",
         )
 
         if WEBHOOK:
             msg = (
                 f"@everyone\n\n"
-                f"# 🔁 TEST {i}/{total} — répétition de l'alarme\n\n"
-                "Ceci simule le comportement réel : le bot **spamme sans fin** "
-                "tant que le signal est là.\n\n"
-                "En production : **toutes les 30 secondes**, jusqu'à ce que tu cliques stop.\n\n"
-                f"🛑 **BOUTON STOP** → {LIEN_STOP}\n"
-                "(menu `···` en haut à droite → `Disable workflow`)"
+                f"# 🔁 TEST {i} — alarme sans fin\n\n"
+                "Ce message se répète **toutes les 5 secondes, sans limite**, "
+                "exactement comme quand la billetterie ouvrira.\n\n"
+                "**Pour l'arrêter** : appuie sur le bouton **`STOP ALARME`** "
+                "dans la notification de ton téléphone.\n\n"
+                f"🛑 Ou désactive le workflow → {LIEN_STOP}"
             )
             corps = json.dumps({"content": msg}).encode()
             req = urllib.request.Request(
@@ -295,12 +297,13 @@ def ping():
             )
             try:
                 with urllib.request.urlopen(req, timeout=20) as rep:
-                    print(f"[{i}/{total}] Discord : HTTP {rep.status}")
+                    print(f"[{i}] Discord : HTTP {rep.status}")
             except (urllib.error.URLError, urllib.error.HTTPError, OSError) as e:
-                print(f"[{i}/{total}] Discord : echec ({e})")
+                print(f"[{i}] Discord : echec ({e})")
 
-        if i < total:
-            time.sleep(CADENCE_ALARME)
+        time.sleep(CADENCE_ALARME)
+
+    print(f">>> Fin du run : {i} alertes envoyees sans appui sur STOP")
 
 
 def main():
