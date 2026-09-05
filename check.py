@@ -224,34 +224,44 @@ def ntfy(titre, message, priorite="max"):
 
 
 def ping():
-    """Message de test sur les deux canaux, pour verifier que l'alarme marche."""
-    ntfy(
-        "TEST - l'alarme fonctionne",
-        "Si ton telephone a sonne, tout est operationnel. "
-        "Le vrai message arrivera quand la billetterie ouvrira.",
-    )
+    """Simulation complete : 4 alertes espacees de 12 s, comme en vraie detection.
 
-    if not WEBHOOK:
-        return
-    msg = (
-        "@everyone\n\n"
-        "# ✅ TEST — le bot fonctionne\n\n"
-        "Si tu vois ce message **et que ton téléphone a sonné**, l'alarme est opérationnelle.\n\n"
-        "Le vrai message arrivera quand la billetterie Türkiye–Fransa ouvrira, "
-        "et il se répétera toutes les 30 secondes jusqu'à ce que tu coupes le workflow."
-    )
-    corps = json.dumps({"content": msg}).encode()
-    req = urllib.request.Request(
-        WEBHOOK,
-        data=corps,
-        headers={"Content-Type": "application/json", "User-Agent": UA},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=20) as rep:
-            print(f"Discord : HTTP {rep.status}")
-    except (urllib.error.URLError, urllib.error.HTTPError, OSError) as e:
-        print(f"Discord : echec ({e})")
+    En production le rythme est de 30 s et ne s'arrete jamais tant que le
+    workflow n'est pas desactive a la main.
+    """
+    total = 4
+    for i in range(1, total + 1):
+        ntfy(
+            f"TEST {i}/{total} - alarme repetee",
+            "Simulation du spam. En vrai ca se repete toutes les 30 s, "
+            "sans fin, jusqu'a ce que tu desactives le workflow.",
+        )
+
+        if WEBHOOK:
+            msg = (
+                f"@everyone\n\n"
+                f"# 🔁 TEST {i}/{total} — répétition de l'alarme\n\n"
+                "Ceci simule le comportement réel : le bot **spamme sans fin** "
+                "tant que le signal est là.\n\n"
+                "En production : **toutes les 30 secondes**, jusqu'à ce que tu cliques stop.\n\n"
+                f"🛑 **BOUTON STOP** → {LIEN_STOP}\n"
+                "(menu `···` en haut à droite → `Disable workflow`)"
+            )
+            corps = json.dumps({"content": msg}).encode()
+            req = urllib.request.Request(
+                WEBHOOK,
+                data=corps,
+                headers={"Content-Type": "application/json", "User-Agent": UA},
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=20) as rep:
+                    print(f"[{i}/{total}] Discord : HTTP {rep.status}")
+            except (urllib.error.URLError, urllib.error.HTTPError, OSError) as e:
+                print(f"[{i}/{total}] Discord : echec ({e})")
+
+        if i < total:
+            time.sleep(12)
 
 
 def main():
