@@ -85,10 +85,36 @@ def normaliser(texte):
     return texte.translate(table).lower()
 
 
+def decoder(octets, entetes):
+    """Le site de la TFF sert du windows-1254 (turc), pas de l'UTF-8.
+
+    Decoder en UTF-8 detruirait tous les caracteres turcs -- et donc les mots
+    "Bilet Satisi Basladi" que l'on cherche. On respecte le charset annonce.
+    """
+    charset = None
+    ct = (entetes.get("Content-Type") or "") if entetes else ""
+    m = re.search(r"charset=[\"']?([\w-]+)", ct, re.I)
+    if m:
+        charset = m.group(1)
+    if not charset:
+        m = re.search(rb"charset=[\"']?([\w-]+)", octets[:4096], re.I)
+        if m:
+            charset = m.group(1).decode("ascii", "ignore")
+
+    for enc in (charset, "windows-1254", "utf-8"):
+        if not enc:
+            continue
+        try:
+            return octets.decode(enc)
+        except (LookupError, UnicodeDecodeError):
+            continue
+    return octets.decode("utf-8", errors="replace")
+
+
 def recuperer(url, brut=False):
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept-Language": "tr,en"})
     with urllib.request.urlopen(req, timeout=25) as rep:
-        data = rep.read().decode("utf-8", errors="replace")
+        data = decoder(rep.read(), rep.headers)
     if brut:
         return data
     data = re.sub(r"<script.*?</script>", " ", data, flags=re.S | re.I)
@@ -102,8 +128,12 @@ def detecter_tff(texte):
     n = normaliser(texte)
     raisons = []
 
-    # "Turkiye - Fransa Macinin (Oncelikli) Bilet Satisi Basladi"
-    for m in re.finditer(r"fransa.{0,90}?bilet\s*sat[iı]s|bilet\s*sat[iı]s.{0,90}?fransa", n):
+    # Couvre toutes les formulations vues chez la TFF :
+    #   "Fransa Macinin Oncelikli Bilet Satisi Basladi"
+    #   "Fransa Maci Biletleri Satisa Cikti"
+    #   "Misafir Tribun Biletleri Satisa Sunulacak"
+    # bilet\w* attrape bilet / biletleri / biletlerin.
+    for m in re.finditer(r"fransa.{0,120}?bilet\w*\s*sat|bilet\w*\s*sat.{0,120}?fransa", n):
         fenetre = n[m.start() : m.end() + 60]
         # La phrase "aucun match en vente" contient les memes mots : on l'ecarte.
         if SENTINELLE in fenetre:
