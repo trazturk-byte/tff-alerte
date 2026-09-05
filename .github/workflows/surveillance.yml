@@ -7,10 +7,14 @@ on:
     - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
-      test_discord:
-        description: "Envoyer un message de TEST sur Discord"
-        type: boolean
-        default: false
+      mode:
+        description: "Que faire ?"
+        type: choice
+        default: normal
+        options:
+          - normal      # surveillance reelle
+          - ping        # simple test de connexion des canaux
+          - simuler     # REPETITION GENERALE : comme si la billetterie venait d'ouvrir
 
 # Evite l'empilement si un run deborde sur le suivant.
 concurrency:
@@ -28,14 +32,14 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Surveillance continue
+      - name: Surveillance
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           PUSHOVER_USER: ${{ secrets.PUSHOVER_USER }}
           PUSHOVER_TOKEN: ${{ secrets.PUSHOVER_TOKEN }}
         run: |
-          if [ "${{ inputs.test_discord }}" = "true" ]; then
-            python check.py --ping
-          else
-            python check.py --watch
-          fi
+          case "${{ inputs.mode }}" in
+            ping)    python check.py --ping ;;
+            simuler) python check.py --watch --simuler ;;
+            *)       python check.py --watch ;;
+          esac

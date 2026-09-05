@@ -387,6 +387,17 @@ def main():
 
 def scanner():
     """Un passage sur les 4 sources. Renvoie les signaux trouves."""
+    if "--simuler" in sys.argv:
+        # Repetition generale : on fait comme si la TFF venait de publier.
+        # Toute la chaine reelle se declenche derriere (Pushover + spam + STOP).
+        print("[SIMULATION] on fait comme si le site avait ete mis a jour")
+        return {
+            "tff_news": [
+                "Annonce de vente détectée : ...Türkiye - Fransa Maçının "
+                "Öncelikli Bilet Satışı Başladı... [SIMULATION]"
+            ]
+        }
+
     trouvailles = {}
     for cle, url in URLS.items():
         try:
