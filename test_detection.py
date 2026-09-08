@@ -30,6 +30,17 @@ CAS = [
     ("News - vieil article 2019", check.detecter_gnews,
      "<item><title>Türkiye Fransa maçı biletleri satışa çıktı</title>"
      "<pubDate>Mon, 03 Jun 2019 09:00:00 GMT</pubDate></item>", False),
+    # FAUX POSITIF REEL du 8 septembre 2026 : la particule interrogative turque.
+    ("News - titre interrogatif mi", check.detecter_gnews,
+     "<item><title>Türkiye-Fransa Maçı Biletleri Satışa Çıktı mı? "
+     "TFF Bilet Takvimi ve Fiyat Bilgisi</title>"
+     "<pubDate>Mon, 07 Sep 2026 09:00:00 GMT</pubDate></item>", False),
+    ("News - titre interrogatif basladi mi", check.detecter_gnews,
+     "<item><title>Türkiye Fransa maçı bilet satışı başladı mı, kaç TL?</title>"
+     "<pubDate>Mon, 07 Sep 2026 09:00:00 GMT</pubDate></item>", False),
+    ("News - titre FAQ ne zaman", check.detecter_gnews,
+     "<item><title>Türkiye Fransa maç bileti ne zaman satışa çıkacak?</title>"
+     "<pubDate>Mon, 07 Sep 2026 09:00:00 GMT</pubDate></item>", False),
     ("News - simple annonce de match", check.detecter_gnews,
      "<item><title>Türkiye Fransa maçı ne zaman?</title>"
      "<pubDate>Mon, 14 Sep 2026 09:00:00 GMT</pubDate></item>", False),

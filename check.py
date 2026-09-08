@@ -168,6 +168,16 @@ def detecter_gnews(xml):
         # Il faut un verbe d'ouverture, pas juste le mot "bilet".
         if not re.search(r"sat[iı]sa\s*c[iı]kt|sat[iı]s[iı]\s*basla|basladi|sat[iı]sta", n):
             continue
+        # FAUX POSITIF CLASSIQUE : la particule interrogative turque "mi/mi/mu/mu"
+        # transforme l'affirmation en question. "Biletleri satisa cikti MI?" =
+        # "Est-ce que les billets sont en vente ?" -> article putaclic, pas une annonce.
+        if re.search(r"\b(mi|mu)\b|\?", n):
+            print(f"[ignore] titre interrogatif (putaclic) : {titre[:80]}")
+            continue
+        # Meme logique : "ne zaman" = "quand ?", "belli oldu mu" = "est-ce connu ?"
+        if re.search(r"ne\s*zaman|kac\s*tl|nereden|nasil", n):
+            print(f"[ignore] titre de type FAQ : {titre[:80]}")
+            continue
 
         date_m = re.search(r"<pubDate>(.*?)</pubDate>", bloc)
         if date_m:
