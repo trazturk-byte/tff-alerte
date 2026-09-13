@@ -30,7 +30,12 @@ INTERVALLE = 30       # secondes entre deux verifications, en veille
 CADENCE_ALARME = 5    # secondes entre deux alertes, une fois la vente detectee.
                       # 5 s est le plancher : en dessous, ntfy et Discord nous
                       # limitent (rate limit) et PLUS AUCUNE alerte ne passe.
-DUREE_RUN = 270       # duree d'une boucle (4 min 30), avant que le cron relance
+# GitHub bride fortement les crons frequents : en pratique un run demarre
+# toutes les 2 a 6 HEURES, pas toutes les 5 minutes. On compense en faisant
+# durer chaque run presque 6 h (plafond des runners GitHub), pour que la
+# couverture reste continue meme avec un cron tres retarde.
+DUREE_RUN = 20400     # 5 h 40
+DUREE_DEMO = 120      # duree du mode test, sinon la demo durerait 6 h
 LIEN_STOP = "https://github.com/trazturk-byte/tff-alerte/actions/workflows/surveillance.yml"
 
 # ntfy.sh : alarme sur telephone, priorite max, traverse le mode silencieux.
@@ -359,7 +364,7 @@ def ping():
 
     debut = time.monotonic()
     i = 0
-    while time.monotonic() - debut < DUREE_RUN:
+    while time.monotonic() - debut < DUREE_DEMO:
         if stop_demande():
             print(f">>> STOP recu apres {i} alertes — demo interrompue")
             ntfy("Alarme coupee", "Le bouton STOP fonctionne. Tout est operationnel.", "default")

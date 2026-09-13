@@ -2,9 +2,12 @@ name: Surveillance billetterie Turkiye-Fransa
 
 on:
   schedule:
-    # Un run toutes les 5 minutes. Chaque run BOUCLE en interne pendant 4 min 30
-    # en verifiant toutes les 30 secondes -> couverture quasi ininterrompue.
-    - cron: "*/5 * * * *"
+    # GitHub BRIDE fortement les crons frequents : en pratique un run demarre
+    # toutes les 2 a 6 heures, pas toutes les 5 minutes. On demande quand meme
+    # toutes les 10 min pour maximiser les chances qu'un run soit relance vite,
+    # et surtout chaque run tourne pres de 6 h (voir timeout ci-dessous) pour
+    # que la couverture reste continue malgre le bridage.
+    - cron: "*/10 * * * *"
   workflow_dispatch:
     inputs:
       mode:
@@ -13,18 +16,21 @@ on:
         default: normal
         options:
           - normal      # surveillance reelle
-          - ping        # simple test de connexion des canaux
+          - ping        # test de connexion des canaux (2 min)
           - simuler     # REPETITION GENERALE : comme si la billetterie venait d'ouvrir
 
-# Evite l'empilement si un run deborde sur le suivant.
+# Un nouveau run remplace celui en cours : on repart sur du frais plutot que
+# d'empiler des jobs de 6 h qui se marcheraient dessus.
 concurrency:
   group: surveillance
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   verifier:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    # 6 h = plafond d'un job sur un runner GitHub. Le script s'arrete de lui-meme
+    # a 5 h 40 (DUREE_RUN), donc le timeout ne sert que de filet.
+    timeout-minutes: 355
     steps:
       - uses: actions/checkout@v4
 
