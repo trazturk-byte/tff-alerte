@@ -41,6 +41,19 @@ CAS = [
     ("News - titre FAQ ne zaman", check.detecter_gnews,
      "<item><title>Türkiye Fransa maç bileti ne zaman satışa çıkacak?</title>"
      "<pubDate>Mon, 07 Sep 2026 09:00:00 GMT</pubDate></item>", False),
+    # Veille hotel : il FAUT un article recent, sinon on re-detecte eternellement
+    # celui d'octobre 2025 sur Turkiye-Georgie.
+    ("Hotel - article recent", check.detecter_hotel,
+     "<item><title>Milli Takım Başiskele'de hangi otelde konaklayacak?</title>"
+     "<pubDate>Tue, 22 Sep 2026 09:00:00 GMT</pubDate></item>", True),
+    ("Hotel - article de 2025", check.detecter_hotel,
+     "<item><title>Milli Takım Başiskele Tryp by Wyndham'da konaklayacak</title>"
+     "<pubDate>Fri, 10 Oct 2025 13:54:00 GMT</pubDate></item>", False),
+    ("Hotel - sans rapport", check.detecter_hotel,
+     "<item><title>Milli Takım kadrosu açıklandı</title>"
+     "<pubDate>Tue, 22 Sep 2026 09:00:00 GMT</pubDate></item>", False),
+    ("Hotel - sans date", check.detecter_hotel,
+     "<item><title>Milli Takım oteli belli oldu</title></item>", False),
     ("News - simple annonce de match", check.detecter_gnews,
      "<item><title>Türkiye Fransa maçı ne zaman?</title>"
      "<pubDate>Mon, 14 Sep 2026 09:00:00 GMT</pubDate></item>", False),

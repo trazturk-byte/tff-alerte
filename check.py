@@ -74,6 +74,13 @@ URLS = {
         "https://news.google.com/rss/search?"
         "q=T%C3%BCrkiye+Fransa+bilet+sat%C4%B1%C5%9F%C4%B1&hl=tr&gl=TR&ceid=TR:tr"
     ),
+    # Veille secondaire : l'hotel de la selection turque. L'info n'est jamais
+    # annoncee officiellement ; en 2025 elle avait fuite par le maire de Kocaeli,
+    # 3 jours avant le match. Alerte DOUCE, pas la sirene.
+    "hotel": (
+        "https://news.google.com/rss/search?"
+        "q=%22milli+tak%C4%B1m%22+Kocaeli+otel+konaklama&hl=tr&gl=TR&ceid=TR:tr"
+    ),
 }
 
 LIBELLES = {
@@ -81,6 +88,7 @@ LIBELLES = {
     "tff_bilet": "TFF — page billetterie",
     "fanclub": "Fan-club — matchs en vente",
     "gnews": "Presse turque (Google News)",
+    "hotel": "Hôtel de la sélection (presse locale)",
 }
 
 
@@ -199,12 +207,57 @@ def detecter_gnews(xml):
     return raisons
 
 
+def detecter_hotel(xml):
+    """Ou loge la selection turque pour le match du 25 septembre 2026 ?
+
+    Piege principal : les articles d'octobre 2025 sur Turkiye-Georgie disent
+    deja "Milli Takim Basiskele Tryp by Wyndham'da konaklayacak". On exige donc
+    un article RECENT, sinon on re-detecte l'ancien tous les jours.
+    """
+    raisons = []
+    limite = datetime.now(timezone.utc) - timedelta(days=7)
+
+    for bloc in re.findall(r"<item>(.*?)</item>", xml, flags=re.S):
+        titre_m = re.search(r"<title>(.*?)</title>", bloc, flags=re.S)
+        if not titre_m:
+            continue
+        titre = unescape(re.sub(r"<!\[CDATA\[|\]\]>", "", titre_m.group(1))).strip()
+        n = normaliser(titre)
+
+        # Il faut parler de l'equipe nationale ET d'hebergement.
+        if "milli tak" not in n:
+            continue
+        if not re.search(r"otel|konakla|kamp|yerlesti", n):
+            continue
+
+        date_m = re.search(r"<pubDate>(.*?)</pubDate>", bloc)
+        if date_m:
+            try:
+                if parsedate_to_datetime(date_m.group(1).strip()) < limite:
+                    continue  # article ancien : Turkiye-Georgie d'octobre 2025
+            except (TypeError, ValueError):
+                continue      # sans date fiable, on n'alerte pas
+        else:
+            continue
+
+        raisons.append(f"Article récent : « {titre} »")
+        if len(raisons) >= 3:
+            break
+
+    return raisons
+
+
 DETECTEURS = {
     "tff_news": detecter_tff,
     "tff_bilet": detecter_tff,
     "fanclub": detecter_fanclub,
     "gnews": detecter_gnews,
+    "hotel": detecter_hotel,
 }
+
+# Sources dont la detection ne declenche PAS l'alarme d'urgence : information
+# utile, mais qui ne demande pas de reveiller quelqu'un a 3 h du matin.
+SOURCES_DOUCES = {"hotel"}
 
 
 def alerter(trouvailles):
@@ -446,7 +499,7 @@ def scanner():
     trouvailles = {}
     for cle, url in URLS.items():
         try:
-            texte = recuperer(url, brut=(cle == "gnews"))
+            texte = recuperer(url, brut=(cle in ("gnews", "hotel")))
         except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as e:
             print(f"[ignore] {LIBELLES[cle]} : {e}")
             continue
@@ -473,11 +526,32 @@ def boucler(test=False):
     debut = time.monotonic()
     tour = 0
     alerte_en_cours = False
+    douces_deja_vues = set()
 
     while time.monotonic() - debut < DUREE_RUN:
         tour += 1
         print(f"\n--- tour {tour} (t+{int(time.monotonic() - debut)}s) ---")
         trouvailles = scanner()
+
+        # Les sources "douces" (hotel de la selection) informent mais ne
+        # declenchent pas la sirene. Une seule notification par run, et on
+        # continue a surveiller la billetterie normalement.
+        douces = {k: v for k, v in trouvailles.items() if k in SOURCES_DOUCES}
+        trouvailles = {k: v for k, v in trouvailles.items() if k not in SOURCES_DOUCES}
+
+        for cle, raisons in douces.items():
+            signature = (cle, raisons[0][:120])
+            if signature in douces_deja_vues or test:
+                continue
+            douces_deja_vues.add(signature)
+            print(f">>> INFO DOUCE — {LIBELLES[cle]}")
+            corps = " / ".join(raisons)[:600]
+            pushover(
+                "Hotel de la selection - info trouvee",
+                f"{corps}\n\nVerifie si le Wellborn est toujours le bon choix.",
+                urgence=False,
+            )
+            ntfy("Hotel de la selection", corps, "default")
 
         if trouvailles:
             alerte_en_cours = True
