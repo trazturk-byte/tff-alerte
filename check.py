@@ -146,7 +146,17 @@ def detecter_tff(texte):
     #   "Fransa Maci Biletleri Satisa Cikti"
     #   "Misafir Tribun Biletleri Satisa Sunulacak"
     # bilet\w* attrape bilet / biletleri / biletlerin.
-    for m in re.finditer(r"fransa.{0,120}?bilet\w*\s*sat|bilet\w*\s*sat.{0,120}?fransa", n):
+    #
+    # DEUX GARDE-FOUS, appris d'un faux positif du 14/09/2026 :
+    #   1. UN SEUL SENS : "Fransa" doit venir AVANT "bilet satis". La TFF met
+    #      toujours le match en tete de titre ("Turkiye - Fransa Macinin ...
+    #      Bilet Satisi Basladi"). Le sens inverse ne matchait que du bruit.
+    #   2. FENETRE COURTE (60 car.) : la page d'actus est un bandeau ou les
+    #      titres se suivent colles, et une fenetre large matchait A CHEVAL
+    #      sur deux titres sans rapport ("...Biletleri Satisa Cikti" d'un
+    #      match belge + "...Belcika ve Fransa Maclarinin Stadyumlari").
+    #      Les vrais titres tiennent en ~35 caracteres entre les deux mots.
+    for m in re.finditer(r"fransa.{0,60}?bilet\w*\s*sat", n):
         fenetre = n[m.start() : m.end() + 60]
         # La phrase "aucun match en vente" contient les memes mots : on l'ecarte.
         if SENTINELLE in fenetre:

@@ -8,6 +8,15 @@ CAS = [
      "Türkiye - Fransa Maçının Genel Bilet Satışları Başladı", True),
     ("TFF - actu sans rapport", check.detecter_tff,
      "Türkiye - Fransa maçı Kocaeli'de oynanacak", False),
+    # FAUX POSITIF REEL du 14/09/2026 : sur le bandeau d'actus de la TFF, deux
+    # titres differents se suivent colles. Une fenetre trop large matchait
+    # "Biletleri Satisa Cikti" (match belge) avec "Fransa" (titre suivant).
+    ("TFF - deux titres a cheval", check.detecter_tff,
+     "Belçika - Türkiye A Millî Maçının Misafir Tribün Biletleri Satışa Çıktı "
+     "A Millî Takım'ın Belçika ve Fransa Maçlarının Stadyumları Belirlendi "
+     "Temmuz Ayı FIFA Dünya Sıralaması Açıklandı", False),
+    ("TFF - billets belges seuls", check.detecter_tff,
+     "Belçika - Türkiye A Millî Maçının Misafir Tribün Biletleri Satışa Çıktı", False),
     # Formulations reelles vues chez la TFF, ratees par la premiere version.
     ("TFF - biletleri satisa cikti", check.detecter_tff,
      "Türkiye - Fransa Maçı Biletleri Satışa Çıktı", True),
